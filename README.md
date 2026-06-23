@@ -2,9 +2,7 @@
 
 An asynchronous job processing system built in Java and Spring Boot — durable
 ingestion via Kafka, a Redis-backed worker queue, Postgres persistence, JWT
-auth, and full observability with Prometheus/Grafana. Built incrementally
-following a 14-week, 70-day curriculum spanning JVM internals through
-load-test-driven GC tuning.
+auth, and full observability with Prometheus/Grafana. Built by spanning JVM internals through load-test-driven GC tuning.
 
 ---
 
@@ -112,13 +110,3 @@ e.g. the admin job-summary aggregation — live in `db/queries/`.
   key) avoids the boundary-burst problem of fixed-window counters, and runs
   as a `HandlerInterceptor` so a rejected request never reaches controller
   logic.
-
----
-
-## Learning Roadmap
-
-This project was built incrementally following a 14-week, 70-day curriculum
-— see [`Job_Queue_Roadmap_Claude.html`](./Job_Queue_Roadmap_Claude.html) —
-progressing from Java/JVM fundamentals through a hand-rolled thread pool,
-Spring Boot + Postgres, Redis/Kafka/JWT, and finally Docker, observability,
-and load-test-driven JVM tuning.
