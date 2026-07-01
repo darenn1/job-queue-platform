@@ -1,5 +1,6 @@
 learning/
-
+job-system/
+job-processor-test/
 
 target/
 **/.mvn/wrapper/maven-wrapper.jar
@@ -34,3 +35,6 @@ summary.json
 
 Thumbs.db
 .directory
+
+*.session.sql
+*.iml
