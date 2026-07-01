@@ -29,9 +29,9 @@ auth, and full observability with Prometheus/Grafana. Built by spanning JVM inte
 | Tool | Min version | Purpose |
 |---|---|---|
 | JDK | 21 | Application runtime |
-| Maven | latest (wrapper included) | Build tool — `pom.xml` |
-| Docker | 24.0 | Container runtime |
-| Docker Compose | 2.20 | Orchestrates Postgres, Redis, Kafka (KRaft mode), Prometheus, Grafana |
+| Maven | 3.9+ (or Maven Wrapper, if included) | Build tool — `pom.xml` |
+| Docker | 24.0+ | Container runtime |
+| Docker Compose | 2.20+ | Orchestrates Postgres, Redis, Kafka (KRaft mode), Prometheus, Grafana |
 | k6 | latest | Load testing (local dev only) |
 
 ### Quick Start
