@@ -73,7 +73,7 @@ class InMemoryJobQueueTest {
         });
         consumer.start();
 
-        // Give the consumer a moment to start blocking on take().
+       
         Thread.sleep(50);
         queue.enqueue(jobToDeliver);
 
