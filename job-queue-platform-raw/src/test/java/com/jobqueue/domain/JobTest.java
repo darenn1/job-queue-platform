@@ -34,6 +34,15 @@ class JobTest {
     }
 
     @Test
+    void incrementRetryCountBumpsAndReturnsTheNewValue() {
+        Job job = new Job("send_email", "{}", 1);
+ 
+        assertEquals(1, job.incrementRetryCount());
+        assertEquals(2, job.incrementRetryCount());
+        assertEquals(2, job.getRetryCount());
+    }
+
+    @Test
     void settingStatusUpdatesTheTimestamp() throws InterruptedException {
         Job job = new Job("resize_image", "{}", 1);
         var originalUpdatedAt = job.getUpdatedAt();
@@ -68,8 +77,8 @@ class JobTest {
     @Test
     void equalityIsBasedOnIdOnly() {
         UUID sharedId = UUID.randomUUID();
-        Job a = new Job(sharedId, "send_email", "{}", JobStatus.PENDING, 1, null, null, null);
-        Job b = new Job(sharedId, "resize_image", "{}", JobStatus.RUNNING, 9, null, null, null);
+        Job a = new Job(sharedId, "send_email", "{}", JobStatus.PENDING, 1, null, null, null, 0);
+        Job b = new Job(sharedId, "resize_image", "{}", JobStatus.RUNNING, 9, null, null, null, 0);
 
         assertEquals(a, b, "Jobs with the same id should be equal regardless of other fields");
         assertEquals(a.hashCode(), b.hashCode());

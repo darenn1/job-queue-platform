@@ -16,6 +16,7 @@ public class Job {
   private Instant createdAt;
   private Instant updatedAt;
   private String result;
+  private int retryCount;
 
   public Job() {
 
@@ -29,6 +30,7 @@ public class Job {
     this.status = JobStatus.PENDING;
     this.createdAt = Instant.now();
     this.updatedAt = this.createdAt;
+    this.retryCount = 0;
   }
 
   @JsonCreator
@@ -39,7 +41,8 @@ public class Job {
              @JsonProperty("priority") int priority,
              @JsonProperty("createdAt") Instant createdAt,
              @JsonProperty("updatedAt") Instant updatedAt,
-             @JsonProperty("result") String result) {
+             @JsonProperty("result") String result,
+             @JsonProperty("retryCount") int retryCount) {
     this.id = id;
     this.type = type;
     this.payload = payload;
@@ -48,6 +51,7 @@ public class Job {
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
     this.result = result;
+    this.retryCount = retryCount;
   }
 
   public UUID getId() {
@@ -113,6 +117,18 @@ public class Job {
 
   public void setResult(String result) {
     this.result = result;
+  }
+
+  public int getRetryCount() {
+    return retryCount;
+  }
+
+  public void setRetryCount(int retryCount) {
+    this.retryCount = retryCount;
+  }
+
+  public int incrementRetryCount() {
+    return ++this.retryCount;
   }
 
   @Override
