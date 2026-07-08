@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobqueue-postgres
+    environment:
+      POSTGRES_DB: jobqueue
+      POSTGRES_USER: jobqueue
+      POSTGRES_PASSWORD: jobqueue
+    ports:
+      - "5432:5432"
+    volumes:
+      - jobqueue-pgdata:/var/lib/postgresql/data
+
+volumes:
+  jobqueue-pgdata:
