@@ -63,8 +63,6 @@ class JobControllerTest {
                         .contentType("application/json")
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                // Day 35: assert on the actual GlobalExceptionHandler response
-                // shape, not just the status code.
                 .andExpect(jsonPath("$.field").value("type"))
                 .andExpect(jsonPath("$.error").value("type must not be blank"))
                 .andExpect(jsonPath("$.timestamp").exists());
@@ -103,7 +101,6 @@ class JobControllerTest {
  
         mockMvc.perform(get("/jobs/{id}", id))
                 .andExpect(status().isNotFound())
-                // Day 35: JobNotFoundException -> GlobalExceptionHandler -> this body.
                 .andExpect(jsonPath("$.error").value("Job not found: " + id))
                 .andExpect(jsonPath("$.field").doesNotExist())
                 .andExpect(jsonPath("$.timestamp").exists());
