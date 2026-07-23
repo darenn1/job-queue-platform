@@ -20,14 +20,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/**
- * @Tag("week7") — Day 36/37 tests. Note @Async has NO effect here: it only
- * takes effect through a Spring AOP proxy, and this test constructs
- * WorkerPool directly with `new WorkerPool(...)`, so processJob() below
- * runs synchronously on the test thread. That's exactly what we want for a
- * deterministic unit test — no waiting, no timing flakiness, no need for
- * Awaitility or Thread.sleep in the test itself.
- */
 @ExtendWith(MockitoExtension.class)
 @Tag("week7")
 class WorkerPoolTest {
@@ -59,7 +51,6 @@ class WorkerPoolTest {
         verify(workerMetrics).jobStarted();
         verify(workerMetrics).jobCompleted();
         verify(workerMetrics, never()).jobFailed();
-        // saved twice: once transitioning to RUNNING, once to COMPLETED
         verify(jobRepository, times(2)).save(job);
     }
 
@@ -90,10 +81,6 @@ class WorkerPoolTest {
         when(jobRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(JobNotFoundException.class, () -> pool.processJob(id));
-        // jobStarted() already fired before the lookup — this documents
-        // current behavior (metrics can drift if a job vanishes mid-flight)
-        // rather than asserting it's ideal; worth revisiting once retry/DLQ
-        // logic exists in Week 6-equivalent hardening.
         verify(workerMetrics).jobStarted();
     }
 

@@ -26,7 +26,7 @@ public class WorkerPool {
   private final WorkerMetrics workerMetrics;
   private final ThreadPoolTaskExecutor taskExecutor;
 
-  public WorkerPool(JobRepository jobRepository, ProcessorRegistry processorRegistry, WorkerMetrics workerMetrics, @Qualifier("workerTaskExecutor") ThreadPoolTaskExecutor taskExecutor) {
+  public WorkerPool(JobRepository jobRepository, ProcessorRegistry processorRegistry, WorkerMetrics workerMetrics, @Qualifier("jobTaskExecutor") ThreadPoolTaskExecutor taskExecutor) {
     this.jobRepository = jobRepository;
     this.processorRegistry = processorRegistry;
     this.workerMetrics = workerMetrics;
