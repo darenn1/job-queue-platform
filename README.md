@@ -37,29 +37,32 @@ auth, and full observability with Prometheus/Grafana. Built by spanning JVM inte
 ### Quick Start
 
 ```bash
-# 1. Copy env template to project root
+# 1. Move into project folder
+cd job-queue-platform-refined
+
+# 2. Copy env template to project root
 cp .env.example .env
 
-# 2. Start infra: Postgres, Redis, Kafka, Prometheus, Grafana
+# 3. Start infra: Postgres, Redis, Kafka, Prometheus, Grafana
 docker compose up -d
 
-# 3. Run Flyway migrations (creates users + jobs tables, indexes)
+# 4. Run Flyway migrations (creates users + jobs tables, indexes)
 ./mvnw flyway:migrate
 
-# 4. Build and run the app
+# 5. Build and run the app
 ./mvnw spring-boot:run
 
-# 5. Submit a job
+# 6. Submit a job
 curl -X POST localhost:8080/jobs -H "Authorization: Bearer <jwt>" \
   -d '{"type":"EMAIL","payload":"{...}"}'
 
-# 6. Watch it flow through Grafana
+# 7. Watch it flow through Grafana
 open http://localhost:3000
 
-# 7. Load test
+# 8. Load test
 k6 run scripts/load_test.js
 
-# 8. Stop cleanly
+# 9. Stop cleanly
 docker compose down
 ```
 
