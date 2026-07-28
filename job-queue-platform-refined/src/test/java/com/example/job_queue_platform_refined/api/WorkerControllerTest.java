@@ -1,12 +1,15 @@
 package com.example.job_queue_platform_refined.api;
 
 import com.example.job_queue_platform_refined.api.dto.WorkerStatusResponse;
+import com.example.job_queue_platform_refined.security.JwtAuthenticationFilter;
 import com.example.job_queue_platform_refined.worker.WorkerPool;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -15,7 +18,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(WorkerController.class)
+@WebMvcTest(
+        controllers = WorkerController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
 @Tag("week7")
 class WorkerControllerTest {
