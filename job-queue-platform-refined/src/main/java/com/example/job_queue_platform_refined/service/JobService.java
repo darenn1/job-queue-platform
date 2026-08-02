@@ -22,17 +22,19 @@ import java.util.UUID;
 
 @Service
 public class JobService {
-  private final JobRepository jobRepository;
-  private final WorkerPool workerPool;
 
-  public JobService(JobRepository jobRepository, WorkerPool workerPool) {
-      this.jobRepository = jobRepository;
-      this.workerPool = workerPool;
-  }
+    private final JobRepository jobRepository;
+    private final WorkerPool workerPool;
 
-  @Transactional
-  public Job submitJob(String type, String payload, int priority) {
+    public JobService(JobRepository jobRepository, WorkerPool workerPool) {
+        this.jobRepository = jobRepository;
+        this.workerPool = workerPool;
+    }
+
+    @Transactional
+    public Job submitJob(String type, String payload, int priority, UUID submittedBy) {
         Job job = new Job(type, payload, priority);
+        job.setSubmittedBy(submittedBy);
         Job saved = jobRepository.save(job);
 
         UUID savedId = saved.getId();
@@ -49,45 +51,52 @@ public class JobService {
 
         return saved;
     }
- 
-    public Job getJob(UUID id) {
-        return jobRepository.findById(id)
+
+    public Job getJob(UUID id, UUID requestingUserId) {
+        Job job = jobRepository.findById(id)
                 .orElseThrow(() -> new JobNotFoundException(id));
+
+        if (!requestingUserId.equals(job.getSubmittedBy())) {
+            throw new JobNotFoundException(id);
+        }
+        return job;
     }
- 
+
     public List<Job> listJobs(JobStatus status) {
         return (status != null)
                 ? jobRepository.findByStatus(status)
                 : jobRepository.findAll();
     }
-    public Page<Job> listJobsOffset(JobStatus status, String type, Pageable pageable) {
-        return jobRepository.findAll(JobSpecifications.filter(status, type), pageable);
+
+    public Page<Job> listJobsOffset(UUID submittedBy, JobStatus status, String type, Pageable pageable) {
+        return jobRepository.findAll(JobSpecifications.filter(submittedBy, status, type), pageable);
     }
- 
-    public JobsKeysetPage listJobsKeyset(JobStatus status, String type, String afterCursorEncoded, int limit) {
+
+    public JobsKeysetPage listJobsKeyset(UUID submittedBy, JobStatus status, String type,
+                                          String afterCursorEncoded, int limit) {
         Pageable pageable = PageRequest.of(0, limit + 1);
- 
+
         List<Job> rows;
         if (afterCursorEncoded == null) {
-            rows = jobRepository.findKeysetFirstPage(status, type, pageable);
+            rows = jobRepository.findKeysetFirstPage(submittedBy, status, type, pageable);
         } else {
             JobCursor cursor = JobCursorCodec.decode(afterCursorEncoded);
-            rows = jobRepository.findKeysetAfter(cursor.status(), cursor.type(),
+            rows = jobRepository.findKeysetAfter(submittedBy, cursor.status(), cursor.type(),
                     cursor.lastCreatedAt(), cursor.lastId(), pageable);
         }
- 
+
         boolean hasMore = rows.size() > limit;
         List<Job> pageContent = hasMore ? rows.subList(0, limit) : rows;
- 
+
         String nextCursor = null;
         if (hasMore) {
             Job last = pageContent.get(pageContent.size() - 1);
             nextCursor = JobCursorCodec.encode(new JobCursor(last.getCreatedAt(), last.getId(), status, type));
         }
- 
+
         return new JobsKeysetPage(pageContent, nextCursor);
     }
- 
+
     public List<AdminJobSummaryRow> getAdminJobsSummary() {
         return jobRepository.findAdminJobSummaryRaw().stream()
                 .map(row -> new AdminJobSummaryRow(
@@ -97,5 +106,4 @@ public class JobService {
                 ))
                 .toList();
     }
-  
 }

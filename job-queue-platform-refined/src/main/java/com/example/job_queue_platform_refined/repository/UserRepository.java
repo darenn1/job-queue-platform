@@ -12,7 +12,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
-    Optional<User> findByApiKey(String apiKey);
+    Optional<User> findByApiKeyHash(String apiKeyHash);
 
     boolean existsByUsername(String username);
 

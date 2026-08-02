@@ -13,34 +13,40 @@ import java.util.List;
 import java.util.UUID;
 
 public interface JobRepository extends JpaRepository<Job, UUID>, JpaSpecificationExecutor<Job> {
+
     List<Job> findByStatus(JobStatus status);
 
     long countByStatus(JobStatus status);
 
+
     @Query("""
             SELECT j FROM Job j
-            WHERE (:status IS NULL OR j.status = :status)
+            WHERE j.submittedBy = :submittedBy
+              AND (:status IS NULL OR j.status = :status)
               AND (:type IS NULL OR j.type = :type)
             ORDER BY j.createdAt DESC, j.id DESC
             """)
-    List<Job> findKeysetFirstPage(@Param("status") JobStatus status,
+    List<Job> findKeysetFirstPage(@Param("submittedBy") UUID submittedBy,
+                                   @Param("status") JobStatus status,
                                    @Param("type") String type,
                                    Pageable pageable);
- 
+
     @Query("""
             SELECT j FROM Job j
-            WHERE (:status IS NULL OR j.status = :status)
+            WHERE j.submittedBy = :submittedBy
+              AND (:status IS NULL OR j.status = :status)
               AND (:type IS NULL OR j.type = :type)
               AND (j.createdAt < :lastCreatedAt
                    OR (j.createdAt = :lastCreatedAt AND j.id < :lastId))
             ORDER BY j.createdAt DESC, j.id DESC
             """)
-    List<Job> findKeysetAfter(@Param("status") JobStatus status,
+    List<Job> findKeysetAfter(@Param("submittedBy") UUID submittedBy,
+                               @Param("status") JobStatus status,
                                @Param("type") String type,
                                @Param("lastCreatedAt") Instant lastCreatedAt,
                                @Param("lastId") UUID lastId,
                                Pageable pageable);
- 
+
     @Query(value = """
             SELECT submitted_by, status, COUNT(*) AS job_count
             FROM jobs
@@ -48,4 +54,4 @@ public interface JobRepository extends JpaRepository<Job, UUID>, JpaSpecificatio
             ORDER BY submitted_by, status
             """, nativeQuery = true)
     List<Object[]> findAdminJobSummaryRaw();
-} 
+}

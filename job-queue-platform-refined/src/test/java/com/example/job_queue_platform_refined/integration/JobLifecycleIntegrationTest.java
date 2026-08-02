@@ -3,6 +3,7 @@ package com.example.job_queue_platform_refined.integration;
 import com.example.job_queue_platform_refined.domain.Job;
 import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.repository.JobRepository;
+import com.example.job_queue_platform_refined.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@Tag("week7")
+@Tag("week9")
 class JobLifecycleIntegrationTest {
 
     @Autowired
@@ -35,21 +35,39 @@ class JobLifecycleIntegrationTest {
     @Autowired
     private JobRepository jobRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @AfterEach
     void cleanUp() {
         jobRepository.deleteAll();
+        userRepository.deleteAll();
+    }
+
+    private String registerAndGetToken() throws Exception {
+        String username = "test-user-" + UUID.randomUUID();
+        Map<String, Object> registerRequest = Map.of(
+                "username", username,
+                "email", username + "@example.com",
+                "password", "password123"
+        );
+
+        String body = mockMvc.perform(post("/auth/register")
+                        .contentType("application/json")
+                        .content(jsonMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        return (String) jsonMapper.readValue(body, Map.class).get("token");
     }
 
     @Test
-    @Transactional
     void submitJob_persistsWithPendingStatus() throws Exception {
-        Map<String, Object> request = Map.of(
-                "type", "send_email",
-                "payload", "{\"to\":\"a@b.com\"}",
-                "priority", 1
-        );
+        String token = registerAndGetToken();
+        Map<String, Object> request = Map.of("type", "send_email", "payload", "{\"to\":\"a@b.com\"}", "priority", 1);
 
         mockMvc.perform(post("/jobs")
+                        .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -58,20 +76,17 @@ class JobLifecycleIntegrationTest {
 
     @Test
     void submitJob_isPickedUpByWorkerAndReachesATerminalStatus() throws Exception {
-        Map<String, Object> request = Map.of(
-                "type", "send_email",
-                "payload", "{\"to\":\"a@b.com\"}",
-                "priority", 1
-        );
+        String token = registerAndGetToken();
+        Map<String, Object> request = Map.of("type", "send_email", "payload", "{\"to\":\"a@b.com\"}", "priority", 1);
 
         String responseBody = mockMvc.perform(post("/jobs")
+                        .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
-        UUID jobId = UUID.fromString(
-                (String) jsonMapper.readValue(responseBody, Map.class).get("id"));
+        UUID jobId = UUID.fromString((String) jsonMapper.readValue(responseBody, Map.class).get("id"));
 
         JobStatus finalStatus = pollUntilTerminal(jobId, 3000);
 

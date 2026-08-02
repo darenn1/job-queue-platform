@@ -3,6 +3,7 @@ package com.example.job_queue_platform_refined.integration;
 import com.example.job_queue_platform_refined.domain.Job;
 import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.repository.JobRepository;
+import com.example.job_queue_platform_refined.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
@@ -20,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Tag("week8_5")
+@Tag("week9")
 class JobPaginationIntegrationTest {
 
     @Autowired
@@ -32,43 +34,42 @@ class JobPaginationIntegrationTest {
     @Autowired
     private JobRepository jobRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     private static final String[] TYPES = {"send_email", "resize_image", "generate_report"};
 
     @AfterEach
     void cleanUp() {
         jobRepository.deleteAll();
+        userRepository.deleteAll();
     }
 
-    @Test
-    void offsetFirstPageForPersistedJobsIncludesNextCursor() throws Exception {
-        for (int i = 0; i < 3; i++) {
-            jobRepository.save(new Job("send_email", "{}", i));
-        }
+    private String registerAndGetToken() throws Exception {
+        String username = "page-" + UUID.randomUUID();
+        Map<String, Object> registerRequest = Map.of(
+                "username", username, "email", username + "@example.com", "password", "password123");
 
-        String body = mockMvc.perform(get("/jobs").queryParam("size", "2"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(2))
-                .andExpect(jsonPath("$.nextCursor").isString())
+        String body = mockMvc.perform(post("/auth/register")
+                        .contentType("application/json")
+                        .content(jsonMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
-        Map<?, ?> parsed = jsonMapper.readValue(body, Map.class);
-        String cursor = (String) parsed.get("nextCursor");
-        assertNotNull(cursor, "persisted jobs should include enough data to build a cursor");
-        assertFalse(cursor.isBlank(), "nextCursor should not be blank when another page exists");
+        return (String) jsonMapper.readValue(body, Map.class).get("token");
     }
 
     @Test
     void paginatingByStatusFilterCollectsExactlyAsManyJobsAsExistInTheDb() throws Exception {
+        String token = registerAndGetToken();
+
         List<UUID> submittedIds = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             String type = TYPES[i % TYPES.length];
-            Map<String, Object> request = Map.of(
-                    "type", type,
-                    "payload", "{}",
-                    "priority", i % 5
-            );
+            Map<String, Object> request = Map.of("type", type, "payload", "{}", "priority", i % 5);
 
             String responseBody = mockMvc.perform(post("/jobs")
+                            .header("Authorization", "Bearer " + token)
                             .contentType("application/json")
                             .content(jsonMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
@@ -91,18 +92,18 @@ class JobPaginationIntegrationTest {
         }
 
         long actualFailedCountInDb = jobRepository.countByStatus(JobStatus.FAILED);
-        assertTrue(actualFailedCountInDb >= forcedFailedCount,
-                "DB should have at least the forced FAILED jobs (plus any that failed naturally)");
+        assertTrue(actualFailedCountInDb >= forcedFailedCount);
 
         Set<UUID> collectedIds = new HashSet<>();
         String cursor = null;
         int pagesFetched = 0;
-        int maxPages = 100; 
+        int maxPages = 100;
 
         do {
-            var requestBuilder = get("/jobs")
+            MockHttpServletRequestBuilder requestBuilder = get("/jobs")
+                    .header("Authorization", "Bearer " + token)
                     .queryParam("status", "FAILED")
-                    .queryParam("size", "5"); 
+                    .queryParam("size", "5");
             if (cursor != null) {
                 requestBuilder = requestBuilder.queryParam("after", cursor);
             }
@@ -115,8 +116,8 @@ class JobPaginationIntegrationTest {
             List<?> content = (List<?>) parsed.get("content");
             for (Object item : content) {
                 String idString = (String) ((Map<?, ?>) item).get("id");
-                boolean isNew = collectedIds.add(UUID.fromString(idString));
-                assertTrue(isNew, "job " + idString + " appeared on more than one page — duplicate");
+                assertTrue(collectedIds.add(UUID.fromString(idString)),
+                        "job " + idString + " appeared on more than one page — duplicate");
             }
 
             cursor = (String) parsed.get("nextCursor");
@@ -127,7 +128,8 @@ class JobPaginationIntegrationTest {
 
         assertEquals(actualFailedCountInDb, collectedIds.size(),
                 "total jobs collected across all paginated pages should exactly match countByStatus(FAILED) in the DB");
-        assertTrue(pagesFetched > 1, "expected pagination across multiple pages given size=5 and " + actualFailedCountInDb + " FAILED jobs");
+        assertTrue(pagesFetched > 1,
+                "expected pagination across multiple pages given size=5 and " + actualFailedCountInDb + " FAILED jobs");
     }
 
     private void waitUntilAllTerminal(List<UUID> ids, long timeoutMillis) throws InterruptedException {

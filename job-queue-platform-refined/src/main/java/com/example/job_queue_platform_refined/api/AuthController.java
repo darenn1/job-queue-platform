@@ -3,13 +3,17 @@ package com.example.job_queue_platform_refined.api;
 import com.example.job_queue_platform_refined.api.dto.AuthResponse;
 import com.example.job_queue_platform_refined.api.dto.LoginRequest;
 import com.example.job_queue_platform_refined.api.dto.RegisterRequest;
+import com.example.job_queue_platform_refined.domain.User;
 import com.example.job_queue_platform_refined.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+ 
+import java.util.Map;
 
 @RestController
 public class AuthController {
@@ -30,5 +34,11 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request.getUsername(), request.getPassword());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/auth/api-key")
+    public ResponseEntity<Map<String, String>> generateApiKey(@AuthenticationPrincipal User currentUser) {
+        String apiKey = authService.generateApiKey(currentUser.getUsername());
+        return ResponseEntity.ok(Map.of("apiKey", apiKey));
     }
 }

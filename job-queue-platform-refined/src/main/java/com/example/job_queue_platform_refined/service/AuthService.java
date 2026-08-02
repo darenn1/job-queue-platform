@@ -6,10 +6,13 @@ import com.example.job_queue_platform_refined.domain.User;
 import com.example.job_queue_platform_refined.exception.DuplicateUserException;
 import com.example.job_queue_platform_refined.exception.InvalidCredentialsException;
 import com.example.job_queue_platform_refined.repository.UserRepository;
+import com.example.job_queue_platform_refined.security.ApiKeyHasher;
 import com.example.job_queue_platform_refined.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
+import java.util.Base64;
 
 @Service
 public class AuthService {
@@ -17,6 +20,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
@@ -42,7 +46,7 @@ public class AuthService {
 
     public AuthResponse login(String username, String rawPassword) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(InvalidCredentialsException::new); 
+                .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new InvalidCredentialsException();
@@ -50,5 +54,18 @@ public class AuthService {
 
         String token = jwtService.generateToken(user.getUsername(), user.getRole().name());
         return new AuthResponse(token, user.getUsername(), user.getRole().name());
+    }
+
+    public String generateApiKey(String username) {
+        byte[] randomBytes = new byte[32];
+        secureRandom.nextBytes(randomBytes);
+        String apiKey = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(InvalidCredentialsException::new);
+        user.setApiKeyHash(ApiKeyHasher.hash(apiKey));
+        userRepository.save(user);
+
+        return apiKey;
     }
 }

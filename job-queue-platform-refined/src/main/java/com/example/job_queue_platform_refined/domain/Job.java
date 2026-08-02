@@ -25,6 +25,9 @@ public class Job {
  
   @Column(nullable = false)
   private int priority = 0;
+
+  @Column(name = "submitted_by")
+  private UUID submittedBy;
  
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
@@ -91,6 +94,14 @@ public class Job {
  
   public void setPriority(int priority) {
       this.priority = priority;
+  }
+
+  public UUID getSubmittedBy() {
+        return submittedBy;
+    }
+ 
+  public void setSubmittedBy(UUID submittedBy) {
+      this.submittedBy = submittedBy;
   }
  
   public Instant getCreatedAt() {

@@ -10,3 +10,7 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+
+jwt:
+  secret: "enu6pw5zve3B8RkgzWhGyysBGiyty3m9N5QMTO3g5vY="
+  expiration-ms: 3600000

@@ -23,8 +23,8 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Column(name = "api_key", unique = true)
-    private String apiKey;
+    @Column(name = "api_key_hash", unique = true)
+    private String apiKeyHash;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -68,12 +68,12 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
-    public String getApiKey() {
-        return apiKey;
+    public String getApiKeyHash() {
+        return apiKeyHash;
     }
 
-    public void setApiKey(String apiKey) {
-        this.apiKey = apiKey;
+    public void setApiKeyHash(String apiKeyHash) {
+        this.apiKeyHash = apiKeyHash;
     }
 
     public Role getRole() {

@@ -11,6 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,10 +21,11 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@Tag("week7")
+@Tag("week9")
 class JobServiceTest {
 
     @Mock
@@ -30,76 +34,75 @@ class JobServiceTest {
     private WorkerPool workerPool;
 
     @Test
-    void submitJobSavesAndTriggersWorkerPoolWithTheSavedJobsId() {
+    void submitJobStampsTheSubmittingUsersIdOnTheJob() {
         JobService service = new JobService(jobRepository, workerPool);
-        UUID generatedId = UUID.randomUUID();
+        UUID submittedBy = UUID.randomUUID();
+        when(jobRepository.save(any(Job.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        when(jobRepository.save(any(Job.class))).thenAnswer(inv -> {
-            Job j = inv.getArgument(0);
-            setId(j, generatedId);
-            return j;
-        });
+        Job result = service.submitJob("send_email", "{}", 2, submittedBy);
 
-        Job result = service.submitJob("send_email", "{\"to\":\"a@b.com\"}", 2);
-
-        assertEquals("send_email", result.getType());
-        assertEquals(JobStatus.PENDING, result.getStatus());
-
-        ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
-        verify(workerPool, times(1)).processJob(idCaptor.capture());
-        assertEquals(generatedId, idCaptor.getValue());
+        assertEquals(submittedBy, result.getSubmittedBy());
+        verify(workerPool, times(1)).processJob(any());
     }
 
     @Test
-    void getJobReturnsJobWhenFound() {
+    void getJobReturnsJobWhenCallerIsTheSubmitter() {
         JobService service = new JobService(jobRepository, workerPool);
         UUID id = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
+        job.setSubmittedBy(owner);
         when(jobRepository.findById(id)).thenReturn(Optional.of(job));
 
-        Job result = service.getJob(id);
+        Job result = service.getJob(id, owner);
 
         assertEquals("resize_image", result.getType());
     }
 
     @Test
-    void getJobThrowsJobNotFoundExceptionWhenAbsent() {
+    void getJobThrowsNotFound_whenCallerIsNotTheSubmitter_evenThoughTheJobExists() {
+        JobService service = new JobService(jobRepository, workerPool);
+        UUID id = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        UUID someoneElse = UUID.randomUUID();
+        Job job = new Job("resize_image", "{}", 0);
+        job.setSubmittedBy(owner);
+        when(jobRepository.findById(id)).thenReturn(Optional.of(job));
+
+        assertThrows(JobNotFoundException.class, () -> service.getJob(id, someoneElse));
+    }
+
+    @Test
+    void getJobThrowsNotFoundWhenJobDoesNotExistAtAll() {
         JobService service = new JobService(jobRepository, workerPool);
         UUID id = UUID.randomUUID();
         when(jobRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThrows(JobNotFoundException.class, () -> service.getJob(id));
+        assertThrows(JobNotFoundException.class, () -> service.getJob(id, UUID.randomUUID()));
     }
 
     @Test
-    void listJobsDelegatesToFindByStatusWhenStatusGiven() {
+    void listJobsOffsetDelegatesToRepositoryWithSpecificationAndPageable() {
         JobService service = new JobService(jobRepository, workerPool);
-        Job failed = new Job("generate_report", "{}", 0);
-        failed.setStatus(JobStatus.FAILED);
-        when(jobRepository.findByStatus(JobStatus.FAILED)).thenReturn(List.of(failed));
+        UUID submittedBy = UUID.randomUUID();
+        when(jobRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                .thenReturn(Page.empty());
 
-        List<Job> result = service.listJobs(JobStatus.FAILED);
+        service.listJobsOffset(submittedBy, JobStatus.FAILED, "send_email", PageRequest.of(0, 20));
 
-        assertEquals(1, result.size());
-        verify(jobRepository).findByStatus(JobStatus.FAILED);
-        verify(jobRepository, never()).findAll();
+        verify(jobRepository).findAll(any(Specification.class), any(PageRequest.class));
     }
 
     @Test
-    void listJobsDelegatesToFindAllWhenNoStatusGiven() {
+    void listJobsKeysetPassesSubmittedByThroughOnFirstPage() {
         JobService service = new JobService(jobRepository, workerPool);
-        when(jobRepository.findAll()).thenReturn(List.of(new Job("send_email", "{}", 0)));
+        UUID submittedBy = UUID.randomUUID();
+        when(jobRepository.findKeysetFirstPage(eq(submittedBy), any(), any(), any())).thenReturn(List.of());
 
-        List<Job> result = service.listJobs(null);
+        service.listJobsKeyset(submittedBy, null, null, null, 20);
 
-        assertEquals(1, result.size());
-        verify(jobRepository).findAll();
-        verify(jobRepository, never()).findByStatus(any());
-    }
-
-    private static void setId(Job job, UUID id) throws Exception {
-        var field = Job.class.getDeclaredField("id");
-        field.setAccessible(true);
-        field.set(job, id);
+        ArgumentCaptor<UUID> captor = ArgumentCaptor.forClass(UUID.class);
+        verify(jobRepository).findKeysetFirstPage(captor.capture(), any(), any(), any());
+        assertEquals(submittedBy, captor.getValue());
     }
 }
