@@ -2,6 +2,7 @@ package com.example.job_queue_platform_refined.api;
 
 import com.example.job_queue_platform_refined.api.dto.AuthResponse;
 import com.example.job_queue_platform_refined.api.dto.LoginRequest;
+import com.example.job_queue_platform_refined.api.dto.RefreshTokenRequest;
 import com.example.job_queue_platform_refined.api.dto.RegisterRequest;
 import com.example.job_queue_platform_refined.domain.User;
 import com.example.job_queue_platform_refined.service.AuthService;
@@ -34,6 +35,18 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request.getUsername(), request.getPassword());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/auth/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        AuthResponse response = authService.refreshAccessToken(request.getRefreshToken());
+        return ResponseEntity.ok(response);
+    }
+ 
+    @PostMapping("/auth/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        authService.logout(request.getRefreshToken());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/auth/api-key")

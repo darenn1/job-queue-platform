@@ -58,7 +58,7 @@ class JobLifecycleIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
-        return (String) jsonMapper.readValue(body, Map.class).get("token");
+        return (String) jsonMapper.readValue(body, Map.class).get("accessToken");
     }
 
     @Test

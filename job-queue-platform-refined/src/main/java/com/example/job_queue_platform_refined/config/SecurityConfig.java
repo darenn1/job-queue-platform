@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/register", "/auth/login").permitAll()
+                        .requestMatchers("/auth/register", "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
                         .requestMatchers("/workers/status", "/admin/jobs/summary").hasRole("ADMIN")
                         .requestMatchers("/jobs/**").authenticated()
                         .anyRequest().authenticated()
