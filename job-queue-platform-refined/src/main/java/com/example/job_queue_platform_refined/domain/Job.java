@@ -2,12 +2,14 @@ package com.example.job_queue_platform_refined.domain;
 
 import jakarta.persistence.*;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "jobs")
-public class Job {
+public class Job implements Serializable {
+  
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   @Column(updatable = false, nullable = false)

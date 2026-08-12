@@ -5,6 +5,7 @@ import com.example.job_queue_platform_refined.domain.Job;
 import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.exception.JobNotFoundException;
 import com.example.job_queue_platform_refined.repository.JobRepository;
+import com.example.job_queue_platform_refined.service.JobCacheService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -25,12 +26,15 @@ public class WorkerPool {
   private final ProcessorRegistry processorRegistry;
   private final WorkerMetrics workerMetrics;
   private final ThreadPoolTaskExecutor taskExecutor;
+  private final JobCacheService jobCacheService;
 
-  public WorkerPool(JobRepository jobRepository, ProcessorRegistry processorRegistry, WorkerMetrics workerMetrics, @Qualifier("jobTaskExecutor") ThreadPoolTaskExecutor taskExecutor) {
+  public WorkerPool(JobRepository jobRepository, ProcessorRegistry processorRegistry, WorkerMetrics workerMetrics, @Qualifier("jobTaskExecutor") ThreadPoolTaskExecutor taskExecutor, JobCacheService jobCacheService) {
     this.jobRepository = jobRepository;
     this.processorRegistry = processorRegistry;
     this.workerMetrics = workerMetrics;
     this.taskExecutor = taskExecutor;
+    this.jobCacheService = jobCacheService;
+    
   }
 
   @PostConstruct
@@ -41,6 +45,7 @@ public class WorkerPool {
       orphaned.forEach(job -> {
         job.setStatus(JobStatus.PENDING);
         jobRepository.save(job);
+        jobCacheService.evict(job.getId());
       });
       logger.warn("Recovered {} orphaned RUNNING job(s) back to PENDING on startup.", orphaned.size());
     }
@@ -61,6 +66,7 @@ public class WorkerPool {
     job.setStatus(JobStatus.RUNNING);
 
     jobRepository.save(job);
+    jobCacheService.evict(jobId);
 
     try {
       JobProcessor processor = processorRegistry.getProcessor(job.getType());
@@ -69,12 +75,14 @@ public class WorkerPool {
       job.setStatus(JobStatus.COMPLETED);
       job.setResult(result);
       jobRepository.save(job);
+      jobCacheService.evict(jobId);
       workerMetrics.jobCompleted();
 
     } catch (JobProcessingException ex) {
       job.setStatus(JobStatus.FAILED);
       job.setResult(ex.getMessage());
       jobRepository.save(job);
+      jobCacheService.evict(jobId);
       workerMetrics.jobFailed();
       logger.warn("Job {} failed: {}", jobId, ex.getMessage());
   }

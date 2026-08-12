@@ -16,7 +16,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,10 +31,12 @@ class JobServiceTest {
     private JobRepository jobRepository;
     @Mock
     private WorkerPool workerPool;
+    @Mock
+    private JobCacheService jobCacheService;
 
     @Test
     void submitJobStampsTheSubmittingUsersIdOnTheJob() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.save(any(Job.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -47,12 +48,12 @@ class JobServiceTest {
 
     @Test
     void getJobReturnsJobWhenCallerIsTheSubmitter() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID id = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
         job.setSubmittedBy(owner);
-        when(jobRepository.findById(id)).thenReturn(Optional.of(job));
+        when(jobCacheService.fetchJobById(id)).thenReturn(job);
 
         Job result = service.getJob(id, owner);
 
@@ -61,29 +62,29 @@ class JobServiceTest {
 
     @Test
     void getJobThrowsNotFound_whenCallerIsNotTheSubmitter_evenThoughTheJobExists() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID id = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         UUID someoneElse = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
         job.setSubmittedBy(owner);
-        when(jobRepository.findById(id)).thenReturn(Optional.of(job));
+        when(jobCacheService.fetchJobById(id)).thenReturn(job);
 
         assertThrows(JobNotFoundException.class, () -> service.getJob(id, someoneElse));
     }
 
     @Test
     void getJobThrowsNotFoundWhenJobDoesNotExistAtAll() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID id = UUID.randomUUID();
-        when(jobRepository.findById(id)).thenReturn(Optional.empty());
+        when(jobCacheService.fetchJobById(id)).thenThrow(new JobNotFoundException(id));
 
         assertThrows(JobNotFoundException.class, () -> service.getJob(id, UUID.randomUUID()));
     }
 
     @Test
     void listJobsOffsetDelegatesToRepositoryWithSpecificationAndPageable() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.findAll(any(Specification.class), any(PageRequest.class)))
                 .thenReturn(Page.empty());
@@ -95,7 +96,7 @@ class JobServiceTest {
 
     @Test
     void listJobsKeysetPassesSubmittedByThroughOnFirstPage() {
-        JobService service = new JobService(jobRepository, workerPool);
+        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.findKeysetFirstPage(eq(submittedBy), any(), any(), any())).thenReturn(List.of());
 

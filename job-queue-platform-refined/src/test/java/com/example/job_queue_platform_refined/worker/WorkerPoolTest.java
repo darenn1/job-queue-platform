@@ -5,6 +5,7 @@ import com.example.job_queue_platform_refined.domain.Job;
 import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.exception.JobNotFoundException;
 import com.example.job_queue_platform_refined.repository.JobRepository;
+import com.example.job_queue_platform_refined.service.JobCacheService;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,10 +33,12 @@ class WorkerPoolTest {
     private WorkerMetrics workerMetrics;
     @Mock
     private ThreadPoolTaskExecutor taskExecutor;
+    @Mock
+    private JobCacheService jobCacheService;
 
     @Test
     void processJob_onSuccess_marksCompletedAndRecordsMetrics() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
         UUID id = UUID.randomUUID();
         Job job = new Job("send_email", "{}", 0);
         JobProcessor processor = mock(JobProcessor.class);
@@ -56,7 +59,7 @@ class WorkerPoolTest {
 
     @Test
     void processJob_onProcessorFailure_marksFailedAndRecordsMetrics() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
         UUID id = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
         JobProcessor processor = mock(JobProcessor.class);
@@ -76,7 +79,7 @@ class WorkerPoolTest {
 
     @Test
     void processJob_throwsJobNotFoundException_whenJobDoesNotExist() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
         UUID id = UUID.randomUUID();
         when(jobRepository.findById(id)).thenReturn(Optional.empty());
 
@@ -86,7 +89,7 @@ class WorkerPoolTest {
 
     @Test
     void start_recoversOrphanedRunningJobsBackToPending() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
         Job orphaned = new Job("send_email", "{}", 0);
         orphaned.setStatus(JobStatus.RUNNING);
         when(jobRepository.findByStatus(JobStatus.RUNNING)).thenReturn(List.of(orphaned));
@@ -99,7 +102,7 @@ class WorkerPoolTest {
 
     @Test
     void start_doesNothingWhenNoOrphanedJobsExist() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
         when(jobRepository.findByStatus(JobStatus.RUNNING)).thenReturn(List.of());
 
         pool.start();
@@ -109,7 +112,7 @@ class WorkerPoolTest {
 
     @Test
     void shutdown_delegatesToTaskExecutor() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
 
         pool.shutdown();
 
@@ -118,7 +121,7 @@ class WorkerPoolTest {
 
     @Test
     void getStatus_assemblesAllFiveFieldsFromItsCollaborators() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
 
         when(taskExecutor.getActiveCount()).thenReturn(2);
         when(workerMetrics.getJobsRunning()).thenReturn(3L);

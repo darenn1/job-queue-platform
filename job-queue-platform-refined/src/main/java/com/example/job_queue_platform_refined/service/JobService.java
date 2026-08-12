@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
+ 
 import java.util.List;
 import java.util.UUID;
 
@@ -25,10 +25,12 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final WorkerPool workerPool;
+    private final JobCacheService jobCacheService;
 
-    public JobService(JobRepository jobRepository, WorkerPool workerPool) {
+    public JobService(JobRepository jobRepository, WorkerPool workerPool,  JobCacheService jobCacheService) {
         this.jobRepository = jobRepository;
         this.workerPool = workerPool;
+        this.jobCacheService = jobCacheService;
     }
 
     @Transactional
@@ -53,10 +55,12 @@ public class JobService {
     }
 
     public Job getJob(UUID id, UUID requestingUserId) {
-        Job job = jobRepository.findById(id)
-                .orElseThrow(() -> new JobNotFoundException(id));
+        Job job = jobCacheService.fetchJobById(id);
 
-        if (!requestingUserId.equals(job.getSubmittedBy())) {
+        // A cache implementation should normally throw for a missing job, but
+        // guard the service boundary as well so callers always receive the API's
+        // not-found contract instead of a NullPointerException.
+        if (job == null || !requestingUserId.equals(job.getSubmittedBy())) {
             throw new JobNotFoundException(id);
         }
         return job;
