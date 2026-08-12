@@ -10,7 +10,8 @@ auth, and full observability with Prometheus/Grafana. Built by spanning JVM inte
 
 | Flow | Transport | Description |
 |---|---|---|
-| Client → Spring Boot | REST (HTTP), JWT | `POST /jobs` submits a job; auth via Bearer JWT, verified without a DB call |
+| Client → Spring Boot | REST (HTTP), JWT | `POST /jobs` submits a job; auth via short-lived Bearer access token, verified without a DB call |
+| Client → Spring Boot | REST (HTTP), refresh token | `POST /auth/refresh` exchanges a long-lived refresh token for a new access token; each exchange rotates the refresh token — the old one is revoked and cannot be reused |
 | Spring Boot → Kafka | Kafka producer, JSON | Job published to `jobs` topic (3 partitions), message key = job ID |
 | Kafka → Spring Boot | `@KafkaListener`, manual ack | Consumer group `workers`; offset committed only after the job is safely enqueued in Redis |
 | Spring Boot → Postgres | Spring Data JPA | Job lookup/persistence, status updates, idempotency-key checks |
@@ -46,23 +47,41 @@ cp .env.example .env
 # 3. Start infra: Postgres, Redis, Kafka, Prometheus, Grafana
 docker compose up -d
 
-# 4. Run Flyway migrations (creates users + jobs tables, indexes)
+# 4. Run Flyway migrations (creates users, jobs, refresh_tokens tables, indexes)
 ./mvnw flyway:migrate
 
 # 5. Build and run the app
 ./mvnw spring-boot:run
 
-# 6. Submit a job
-curl -X POST localhost:8080/jobs -H "Authorization: Bearer <jwt>" \
+# 6. Register and log in — response includes BOTH an access token and a refresh token
+curl -X POST localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","email":"alice@example.com","password":"password123"}'
+# -> { "accessToken": "...", "refreshToken": "...", "username": "alice", "role": "USER" }
+
+# 7. Submit a job with the access token
+curl -X POST localhost:8080/jobs -H "Authorization: Bearer <accessToken>" \
   -d '{"type":"EMAIL","payload":"{...}"}'
 
-# 7. Watch it flow through Grafana
+# 8. When the access token expires (1h), exchange the refresh token for a new pair —
+#    the OLD refresh token is revoked the instant this succeeds; save the new one
+curl -X POST localhost:8080/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refreshToken>"}'
+# -> a fresh { "accessToken": "...", "refreshToken": "..." } pair
+
+# 9. Log out — revokes the refresh token server-side, independent of access-token expiry
+curl -X POST localhost:8080/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refreshToken>"}'
+
+# 10. Watch it flow through Grafana
 open http://localhost:3000
 
-# 8. Load test
+# 11. Load test
 k6 run scripts/load_test.js
 
-# 9. Stop cleanly
+# 12. Stop cleanly
 docker compose down
 ```
 
@@ -74,13 +93,17 @@ docker compose down
 |---|---|---|
 | `users` | App (registration) | `id UUID`, `email`, `password_hash`, `role`, `created_at` |
 | `jobs` | App (submission + workers) | `id UUID`, `type`, `payload`, `status`, `priority`, `retry_count`, `submitted_by` (FK → users), `idempotency_key`, `result`, `created_at`, `updated_at` |
+| `refresh_tokens` | App (login/register/refresh) | `id UUID` (FK → users), `token_hash`, `expires_at`, `revoked`, `created_at` |
 
 **Indexes:** `idx_jobs_status`, `idx_jobs_submitted_by`, composite
 `idx_jobs_created_at_id` (`created_at DESC, id DESC` — supports keyset
-pagination), and a partial unique index on `idempotency_key WHERE
-idempotency_key IS NOT NULL`.
+pagination), and a partial unique index on `idempotency_key WHERE idempotency_key IS NOT NULL` and `idx_refresh_tokens_user_id`.
 
-Migrations live in `db/migration/` (Flyway, `V1`–`V5`+). Reference queries —
+**Note on secrets at rest**: neither `password_hash`, `api_key_hash`, nor `token_hash` ever stores a raw, usable credential. Passwords use BCrypt (salted, deliberately slow — resists brute-forcing a low-entropy, human-chosen secret). API keys and refresh tokens use SHA-256 instead — both are already-random, high-entropy values generated server-side, so a fast deterministic hash is the correct tool: it supports an indexed lookup `(WHERE token_hash = ?)` that a salted hash like BCrypt cannot, without the unnecessary per-request latency BCrypt's slowness would add for a value that was never guessable in the first place.
+
+A scheduled job (`RefreshTokenCleanupService`, daily) deletes `refresh_tokens` rows once they're genuinely expired, or have been revoked for more than 7 days — the retention window keeps recently revoked tokens around briefly for reuse-detection purposes before they're purged.
+
+Migrations live in `db/migration/` (Flyway, `V1`–`V7`+). Reference queries —
 e.g. the admin job-summary aggregation — live in `db/queries/`.
 
 ---
@@ -113,3 +136,5 @@ e.g. the admin job-summary aggregation — live in `db/queries/`.
   key) avoids the boundary-burst problem of fixed-window counters, and runs
   as a `HandlerInterceptor` so a rejected request never reaches controller
   logic.
+
+- **Dual-token auth with rotation, not a single long-lived JWT** — a single-token design    forces a choice between short expiry (frequent re-login) and long expiry (a leaked token stays dangerous for a long time). Splitting the concerns avoids the trade-off: the access token stays short-lived and stateless (verified without a DB call, unrevocable before expiry by design), while the refresh token is a database row — long-lived, but revocable — used only to mint new access tokens. *Rotation*: every `/auth/refresh` call immediately revokes the presented refresh token and issues a new one — a refresh token is single-use by design, never reused across renewals. *Reuse detection*: because tokens are single-use, a refresh token being presented a second time (found in the database but already revoked) is treated as evidence of compromise, not a benign retry — the response is to revoke *every* refresh token belonging to that user, not just the reused one. This is deliberate: it means a stolen-and-reused token forces the legitimate user to re-authenticate everywhere, closing the whole session family rather than leaving the attacker's access intact alongside the victim's. Same pattern used by Auth0 and AWS Cognito for the same reason.
