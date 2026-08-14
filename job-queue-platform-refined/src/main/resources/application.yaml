@@ -28,6 +28,14 @@ jwt:
   secret: "enu6pw5zve3B8RkgzWhGyysBGiyty3m9N5QMTO3g5vY="
   expiration-ms: 3600000
   refresh-expiration-ms: 2592000000
+  
+rate-limit:
+  requests-per-window: 100
+  window-seconds: 60
+ 
+worker:
+  consumer-threads: 4
+  max-retries: 3
  
 logging:
   level:

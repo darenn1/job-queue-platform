@@ -28,6 +28,9 @@ public class Job implements Serializable {
   @Column(nullable = false)
   private int priority = 0;
 
+  @Column(name = "retry_count", nullable = false)
+  private int retryCount = 0;
+
   @Column(name = "submitted_by")
   private UUID submittedBy;
  
@@ -98,9 +101,17 @@ public class Job implements Serializable {
       this.priority = priority;
   }
 
+  public int getRetryCount() {
+      return retryCount;
+  }
+ 
+  public void setRetryCount(int retryCount) {
+      this.retryCount = retryCount;
+  }
+
   public UUID getSubmittedBy() {
-        return submittedBy;
-    }
+      return submittedBy;
+  }
  
   public void setSubmittedBy(UUID submittedBy) {
       this.submittedBy = submittedBy;

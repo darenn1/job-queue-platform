@@ -4,7 +4,7 @@ import com.example.job_queue_platform_refined.domain.Job;
 import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.exception.JobNotFoundException;
 import com.example.job_queue_platform_refined.repository.JobRepository;
-import com.example.job_queue_platform_refined.worker.WorkerPool;
+import com.example.job_queue_platform_refined.worker.RedisJobQueue;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,25 +30,25 @@ class JobServiceTest {
     @Mock
     private JobRepository jobRepository;
     @Mock
-    private WorkerPool workerPool;
+    private RedisJobQueue redisJobQueue;
     @Mock
     private JobCacheService jobCacheService;
 
     @Test
     void submitJobStampsTheSubmittingUsersIdOnTheJob() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.save(any(Job.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Job result = service.submitJob("send_email", "{}", 2, submittedBy);
 
         assertEquals(submittedBy, result.getSubmittedBy());
-        verify(workerPool, times(1)).processJob(any());
+        verify(redisJobQueue, times(1)).enqueue(any());
     }
 
     @Test
     void getJobReturnsJobWhenCallerIsTheSubmitter() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID id = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
@@ -62,7 +62,7 @@ class JobServiceTest {
 
     @Test
     void getJobThrowsNotFound_whenCallerIsNotTheSubmitter_evenThoughTheJobExists() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID id = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         UUID someoneElse = UUID.randomUUID();
@@ -75,7 +75,7 @@ class JobServiceTest {
 
     @Test
     void getJobThrowsNotFoundWhenJobDoesNotExistAtAll() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID id = UUID.randomUUID();
         when(jobCacheService.fetchJobById(id)).thenThrow(new JobNotFoundException(id));
 
@@ -84,7 +84,7 @@ class JobServiceTest {
 
     @Test
     void listJobsOffsetDelegatesToRepositoryWithSpecificationAndPageable() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.findAll(any(Specification.class), any(PageRequest.class)))
                 .thenReturn(Page.empty());
@@ -96,7 +96,7 @@ class JobServiceTest {
 
     @Test
     void listJobsKeysetPassesSubmittedByThroughOnFirstPage() {
-        JobService service = new JobService(jobRepository, workerPool, jobCacheService);
+        JobService service = new JobService(jobRepository, redisJobQueue, jobCacheService);
         UUID submittedBy = UUID.randomUUID();
         when(jobRepository.findKeysetFirstPage(eq(submittedBy), any(), any(), any())).thenReturn(List.of());
 

@@ -8,7 +8,7 @@ import com.example.job_queue_platform_refined.domain.JobStatus;
 import com.example.job_queue_platform_refined.exception.JobNotFoundException;
 import com.example.job_queue_platform_refined.repository.JobRepository;
 import com.example.job_queue_platform_refined.repository.spec.JobSpecifications;
-import com.example.job_queue_platform_refined.worker.WorkerPool;
+import com.example.job_queue_platform_refined.worker.RedisJobQueue;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,12 +24,12 @@ import java.util.UUID;
 public class JobService {
 
     private final JobRepository jobRepository;
-    private final WorkerPool workerPool;
+    private final RedisJobQueue redisJobQueue;
     private final JobCacheService jobCacheService;
 
-    public JobService(JobRepository jobRepository, WorkerPool workerPool,  JobCacheService jobCacheService) {
+    public JobService(JobRepository jobRepository, RedisJobQueue redisJobQueue,  JobCacheService jobCacheService) {
         this.jobRepository = jobRepository;
-        this.workerPool = workerPool;
+        this.redisJobQueue = redisJobQueue;
         this.jobCacheService = jobCacheService;
     }
 
@@ -44,11 +44,11 @@ public class JobService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    workerPool.processJob(savedId);
+                    redisJobQueue.enqueue(savedId);
                 }
             });
         } else {
-            workerPool.processJob(savedId);
+            redisJobQueue.enqueue(savedId);
         }
 
         return saved;
@@ -57,9 +57,6 @@ public class JobService {
     public Job getJob(UUID id, UUID requestingUserId) {
         Job job = jobCacheService.fetchJobById(id);
 
-        // A cache implementation should normally throw for a missing job, but
-        // guard the service boundary as well so callers always receive the API's
-        // not-found contract instead of a NullPointerException.
         if (job == null || !requestingUserId.equals(job.getSubmittedBy())) {
             throw new JobNotFoundException(id);
         }

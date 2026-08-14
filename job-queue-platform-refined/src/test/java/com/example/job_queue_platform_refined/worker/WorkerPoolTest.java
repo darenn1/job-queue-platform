@@ -35,10 +35,15 @@ class WorkerPoolTest {
     private ThreadPoolTaskExecutor taskExecutor;
     @Mock
     private JobCacheService jobCacheService;
+    @Mock
+    private RedisJobQueue redisJobQueue;
+ 
+    private static final int MAX_RETRIES = 3;
 
     @Test
     void processJob_onSuccess_marksCompletedAndRecordsMetrics() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
         UUID id = UUID.randomUUID();
         Job job = new Job("send_email", "{}", 0);
         JobProcessor processor = mock(JobProcessor.class);
@@ -59,7 +64,8 @@ class WorkerPoolTest {
 
     @Test
     void processJob_onProcessorFailure_marksFailedAndRecordsMetrics() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
         UUID id = UUID.randomUUID();
         Job job = new Job("resize_image", "{}", 0);
         JobProcessor processor = mock(JobProcessor.class);
@@ -79,7 +85,8 @@ class WorkerPoolTest {
 
     @Test
     void processJob_throwsJobNotFoundException_whenJobDoesNotExist() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
         UUID id = UUID.randomUUID();
         when(jobRepository.findById(id)).thenReturn(Optional.empty());
 
@@ -89,7 +96,8 @@ class WorkerPoolTest {
 
     @Test
     void start_recoversOrphanedRunningJobsBackToPending() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
         Job orphaned = new Job("send_email", "{}", 0);
         orphaned.setStatus(JobStatus.RUNNING);
         when(jobRepository.findByStatus(JobStatus.RUNNING)).thenReturn(List.of(orphaned));
@@ -102,7 +110,8 @@ class WorkerPoolTest {
 
     @Test
     void start_doesNothingWhenNoOrphanedJobsExist() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
         when(jobRepository.findByStatus(JobStatus.RUNNING)).thenReturn(List.of());
 
         pool.start();
@@ -112,7 +121,8 @@ class WorkerPoolTest {
 
     @Test
     void shutdown_delegatesToTaskExecutor() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
 
         pool.shutdown();
 
@@ -121,7 +131,8 @@ class WorkerPoolTest {
 
     @Test
     void getStatus_assemblesAllFiveFieldsFromItsCollaborators() {
-        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor, jobCacheService);
+        WorkerPool pool = new WorkerPool(jobRepository, processorRegistry, workerMetrics, taskExecutor,
+                jobCacheService, redisJobQueue, 4, MAX_RETRIES);
 
         when(taskExecutor.getActiveCount()).thenReturn(2);
         when(workerMetrics.getJobsRunning()).thenReturn(3L);
